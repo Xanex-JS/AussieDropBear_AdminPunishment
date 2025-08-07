@@ -1,25 +1,26 @@
---[[
+--[[ 
     Author: AussieDropBear
-    Desc: Shock collar for niggas who troll staff
+    Desc: Shock collar & comms service for staff 
 --]]
 
 fx_version 'cerulean'
 game 'gta5'
 
-description 'Shock collar for niggas who troll staff made by aussiedropbear'
+description 'Shock collar & comms service for staff by aussiedropbear'
 author 'AussieDropBear'
 version '1.0.0'
 
-client_script {
-    'client/c_main.lua',
-}
-
 shared_script {
-    '@ox_lib/init.lua'
+    '@ox_lib/init.lua',
+    'config.lua'
 }
 
-server_script {
+client_scripts {
+    'client/c_comms.lua',
+    'client/c_main.lua'
+}
+
+server_scripts {
+    'server/s_comms.lua',
     'server/s_main.lua'
 }
-
-lua54 'yes'
