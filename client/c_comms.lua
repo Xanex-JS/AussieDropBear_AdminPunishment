@@ -3,6 +3,8 @@ local serviceTime = 0
 local currentTask = nil
 local watchNPCs = {}
 local propNetId = nil
+local maxServiceDistance = 50.0
+local serviceReturnCooldown = false
 
 local serviceLocation = vector3(1731.32, 2540.54, 45.56)
 local taskLocations = {
@@ -12,10 +14,52 @@ local taskLocations = {
     vector3(1724.6, 2547.2, 45.56)
 }
 
+local taskVariants = {
+    {
+        anim = "world_human_janitor",
+        prop = `prop_tool_broom`,
+        bone = 28422,
+        offset = vec3(0.0, 0.0, 0.0),
+        rot = vec3(0.0, 0.0, 0.0),
+        duration = 7000
+    },
+    {
+        anim = "world_human_gardener_plant",
+        prop = `prop_cs_rake`,
+        bone = 28422,
+        offset = vec3(0.0, 0.0, 0.0),
+        rot = vec3(0.0, 0.0, 0.0),
+        duration = 8000
+    },
+    {
+        anim = "world_human_hammering",
+        prop = `prop_tool_hammer`,
+        bone = 28422,
+        offset = vec3(0.0, 0.0, 0.0),
+        rot = vec3(0.0, 0.0, 0.0),
+        duration = 6500
+    },
+    {
+        anim = "world_human_maid_clean",
+        prop = `prop_sponge_01`,
+        bone = 28422,
+        offset = vec3(0.0, 0.0, 0.0),
+        rot = vec3(0.0, 0.0, 0.0),
+        duration = 7500
+    },
+    {
+        anim = "world_human_welding",
+        prop = `prop_weld_torch`,
+        bone = 28422,
+        offset = vec3(0.13, 0.02, 0.0),
+        rot = vec3(0.0, 90.0, 180.0),
+        duration = 8500
+    }
+}
+
 function Draw3DText(x, y, z, text)
     local onScreen, _x, _y = World3dToScreen2d(x, y, z)
     local camCoords = GetGameplayCamCoords()
-    local dist = #(vector3(x, y, z) - camCoords)
 
     if onScreen then
         SetTextScale(0.35, 0.35)
@@ -38,7 +82,7 @@ CreateThread(function()
             local playerCoords = GetEntityCoords(playerPed)
 
             if #(playerCoords - serviceLocation) < 25.0 then
-                DrawMarker(2, serviceLocation.x, serviceLocation.y, serviceLocation.z + 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.4, 0.4, 0.4, 102, 204, 255, 150, false, false, 2, false, nil, nil, false)
+                DrawMarker(2, serviceLocation.x, serviceLocation.y, serviceLocation.z + 0.2, 0, 0, 0, 0, 0, 0, 0.4, 0.4, 0.4, 102, 204, 255, 150, false, false, 2, false, nil, nil, false)
                 if #(playerCoords - serviceLocation) < 5.0 then
                     Draw3DText(serviceLocation.x, serviceLocation.y, serviceLocation.z + 0.6, "[🧹] Community Service Yard")
                 end
@@ -46,7 +90,7 @@ CreateThread(function()
 
             for _, loc in ipairs(taskLocations) do
                 if #(playerCoords - loc) < 15.0 then
-                    DrawMarker(2, loc.x, loc.y, loc.z + 0.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.3, 153, 255, 153, 120, false, false, 2, false, nil, nil, false)
+                    DrawMarker(2, loc.x, loc.y, loc.z + 0.2, 0, 0, 0, 0, 0, 0, 0.3, 0.3, 0.3, 153, 255, 153, 120, false, false, 2, false, nil, nil, false)
                     if #(playerCoords - loc) < 4.0 then
                         Draw3DText(loc.x, loc.y, loc.z + 0.5, "[🧹] Task Zone")
                     end
@@ -90,8 +134,23 @@ local function startTask(loc)
     TaskTurnPedToFaceCoord(ped, loc.x, loc.y, loc.z, 1000)
     Wait(1000)
 
+    local variant = taskVariants[math.random(#taskVariants)]
+
+    RequestModel(variant.prop)
+    while not HasModelLoaded(variant.prop) do Wait(0) end
+
+    local prop = CreateObject(variant.prop, loc.x, loc.y, loc.z, true, true, false)
+    AttachEntityToEntity(prop, ped, GetPedBoneIndex(ped, variant.bone),
+        variant.offset.x, variant.offset.y, variant.offset.z,
+        variant.rot.x, variant.rot.y, variant.rot.z,
+        true, true, false, true, 1, true)
+
+    propNetId = ObjToNet(prop)
+
+    TaskStartScenarioInPlace(ped, variant.anim, 0, true)
+
     lib.progressCircle({
-        duration = math.random(6000, 10000),
+        duration = variant.duration,
         label = 'Doing community service...',
         position = 'bottom',
         useWhileDead = false,
@@ -99,16 +158,6 @@ local function startTask(loc)
         disable = { car = true, move = true, combat = true },
     })
 
-    local propModel = `prop_tool_broom`
-    RequestModel(propModel)
-    while not HasModelLoaded(propModel) do Wait(0) end
-
-    local prop = CreateObject(propModel, loc.x, loc.y, loc.z, true, true, false)
-    AttachEntityToEntity(prop, ped, GetPedBoneIndex(ped, 28422), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, true, true, false, true, 1, true)
-    propNetId = ObjToNet(prop)
-
-    TaskStartScenarioInPlace(ped, "world_human_janitor", 0, true)
-    Wait(7000)
     ClearPedTasks(ped)
     DeleteObject(prop)
     propNetId = nil
@@ -116,10 +165,35 @@ local function startTask(loc)
     TriggerServerEvent('community:taskCompleted')
 end
 
+
 RegisterNetEvent('community:startService', function(taskCount)
     inService = true
     serviceTime = taskCount
     spawnGuards()
+
+    CreateThread(function()
+    while inService do
+        Wait(5000)
+        local ped = PlayerPedId()
+        local dist = #(GetEntityCoords(ped) - serviceLocation)
+
+        if dist > maxServiceDistance and not serviceReturnCooldown and inService then
+            serviceReturnCooldown = true
+            SetEntityCoords(ped, serviceLocation)
+            lib.notify({
+                title = 'Community Service',
+                description = 'You tried to escape. You have been returned and given an extra task.',
+                type = 'error'
+            })
+            taskCount = taskCount + 1
+
+            SetTimeout(3000, function()
+                serviceReturnCooldown = false
+            end)
+            end
+            end
+            end)
+
 
     lib.notify({
         title = 'Community Service',
@@ -169,4 +243,26 @@ RegisterNetEvent('community:taskUpdate', function(remaining)
         description = ('Task completed! %s task(s) remaining.'):format(remaining),
         type = 'success'
     })
+end)
+
+RegisterNetEvent("community:openUiMenu", function()
+    local input = lib.inputDialog("Assign Community Service", {
+        { type = "number", label = "Player ID", required = true },
+        { type = "number", label = "Number of Tasks", required = true, default = 5 },
+    })
+
+    if not input then return end
+
+    local targetId, taskCount = table.unpack(input)
+
+    if not targetId or not taskCount then
+        lib.notify({
+            title = "Community Service",
+            description = "Invalid input.",
+            type = "error"
+        })
+        return
+    end
+
+    TriggerServerEvent("community:assignServiceFromUI", targetId, taskCount)
 end)

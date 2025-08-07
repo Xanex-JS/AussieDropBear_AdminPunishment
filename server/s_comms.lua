@@ -1,38 +1,13 @@
 local taskCounts = {}
+local savedInventories = {} 
 
-RegisterCommand("communityservice", function(source, args, rawCommand)
-    local targetId = tonumber(args[1])
-    local taskAmount = tonumber(args[2])
-
-    if not targetId or not taskAmount then
-        if source ~= 0 then
-            TriggerClientEvent('ox_lib:notify', source, {
-                title = 'Community Service',
-                description = 'Usage: /communityservice [id] [taskCount]',
-                type = 'error'
-            })
-        else
-            print("Usage: /communityservice [id] [taskCount]")
-        end
+RegisterCommand("csui", function(source)
+    if source == 0 then
+        print("This command can only be used in-game.")
         return
     end
-
-    taskCounts[targetId] = taskAmount
-    TriggerClientEvent('community:startService', targetId, taskAmount)
-
-    -- Optional: Clear inventory
-    exports.ox_inventory:ClearInventory(targetId)
-
-    if source ~= 0 then
-        TriggerClientEvent('ox_lib:notify', source, {
-            title = 'Community Service',
-            description = ('Player %s assigned to %s task(s).'):format(targetId, taskAmount),
-            type = 'success'
-        })
-    else
-        print(("Player %s assigned to %s tasks."):format(targetId, taskAmount))
-    end
-end, true)
+    TriggerClientEvent("community:openUiMenu", source)
+end, false)
 
 RegisterNetEvent('community:taskCompleted', function()
     local src = source
@@ -45,11 +20,26 @@ RegisterNetEvent('community:taskCompleted', function()
             taskCounts[src] = nil
             TriggerClientEvent('community:endService', src)
 
-            -- Optional: Return items
-            exports.ox_inventory:AddItem(src, "water", 2)
-            exports.ox_inventory:AddItem(src, "sandwich", 2)
+            -- exports.ox_inventory:AddItem(src, "water", 2)
+            -- exports.ox_inventory:AddItem(src, "sandwich", 2)
         else
             TriggerClientEvent('community:taskUpdate', src, remaining)
         end
     end
+end)
+
+RegisterNetEvent("community:assignServiceFromUI", function(targetId, taskCount)
+    local src = source
+    if not targetId or not taskCount then return end
+
+    taskCounts[targetId] = taskCount
+    TriggerClientEvent('community:startService', targetId, taskCount)
+
+    exports.ox_inventory:ClearInventory(targetId)
+
+    TriggerClientEvent('ox_lib:notify', src, {
+        title = "Community Service",
+        description = ("Assigned %s tasks to player ID %s."):format(taskCount, targetId),
+        type = "success"
+    })
 end)
