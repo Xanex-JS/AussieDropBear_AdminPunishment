@@ -1,13 +1,12 @@
 local taskCounts = {}
 local savedInventories = {} 
 
-RegisterCommand("csui", function(source)
-    if source == 0 then
-        print("This command can only be used in-game.")
-        return
-    end
+lib.addCommand('comms', {
+    help = 'Usage: [TargetID] [Amount]',
+    restricted = 'group.admin',
+}, function(source, args, raw)
     TriggerClientEvent("community:openUiMenu", source)
-end, false)
+end)
 
 RegisterNetEvent('community:taskCompleted', function()
     local src = source
@@ -19,9 +18,6 @@ RegisterNetEvent('community:taskCompleted', function()
         if remaining <= 0 then
             taskCounts[src] = nil
             TriggerClientEvent('community:endService', src)
-
-            -- exports.ox_inventory:AddItem(src, "water", 2)
-            -- exports.ox_inventory:AddItem(src, "sandwich", 2)
         else
             TriggerClientEvent('community:taskUpdate', src, remaining)
         end

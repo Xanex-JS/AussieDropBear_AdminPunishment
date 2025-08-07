@@ -3,15 +3,19 @@ local serviceTime = 0
 local currentTask = nil
 local watchNPCs = {}
 local propNetId = nil
-local maxServiceDistance = 50.0
+local maxServiceDistance = 150.0
 local serviceReturnCooldown = false
+local taskCount = 0
 
-local serviceLocation = vector3(1731.32, 2540.54, 45.56)
+local serviceLocation = vector3(-3251.69, 3910.15, 15.26)
 local taskLocations = {
-    vector3(1725.1, 2530.7, 45.56),
-    vector3(1738.5, 2528.3, 45.56),
-    vector3(1735.7, 2543.9, 45.56),
-    vector3(1724.6, 2547.2, 45.56)
+    vector3(-3256.88, 3982.22, 15.26),
+    vector3(-3245.66, 4003.28, 15.26),
+    vector3(-3219.03, 4038.24, 15.72),
+    vector3(-3209.74, 4014.27, 15.58),
+    vector3(-3217.38, 3989.66, 15.25),
+    vector3(-3226.81, 3961.13, 15.26),
+    vector3(-3216.4, 3910.95, 15.26)
 }
 
 local taskVariants = {
@@ -80,10 +84,20 @@ CreateThread(function()
         if inService then
             local playerPed = PlayerPedId()
             local playerCoords = GetEntityCoords(playerPed)
+            
 
             if #(playerCoords - serviceLocation) < 25.0 then
                 DrawMarker(2, serviceLocation.x, serviceLocation.y, serviceLocation.z + 0.2, 0, 0, 0, 0, 0, 0, 0.4, 0.4, 0.4, 102, 204, 255, 150, false, false, 2, false, nil, nil, false)
                 if #(playerCoords - serviceLocation) < 5.0 then
+
+                    -- if not IsControlReleased(0, 38) then 
+                    -- lib.notify({
+                    -- title = 'Community Service',
+                    -- description = 'You have ' .. taskCount .. ' actions left to complete',
+                    -- type = 'error'
+                    -- })
+                    -- end
+
                     Draw3DText(serviceLocation.x, serviceLocation.y, serviceLocation.z + 0.6, "[🧹] Community Service Yard")
                 end
             end
@@ -103,8 +117,8 @@ end)
 local function spawnGuards()
     local models = { `s_m_m_prisguard_01`, `s_m_m_security_01` }
     local positions = {
-        vector4(1718.0, 2532.5, 47.0, 180.0),
-        vector4(1740.0, 2545.5, 47.0, 270.0),
+        vector4(-3254.71, 3915.13, 14.26, 270.56),
+        vector4(-3235.22, 3776.6, 14.26, 3.37)
     }
 
     for i, pos in ipairs(positions) do
@@ -117,6 +131,53 @@ local function spawnGuards()
         watchNPCs[#watchNPCs + 1] = ped
     end
 end
+
+local function spawnHelper()
+    local models = { `s_m_m_prisguard_01`, `s_m_m_security_01` }
+    local positions = {
+        vector4(-3255.32, 3907.28, 14.26, 266.12)
+    }
+
+    for i, pos in ipairs(positions) do
+        RequestModel(models[i])
+        while not HasModelLoaded(models[i]) do Wait(0) end
+
+        local ped = CreatePed(4, models[i], pos.x, pos.y, pos.z, pos.w, false, true)
+        SetPedFleeAttributes(ped, 0, 0)
+        SetPedDiesWhenInjured(ped, false)
+        TaskStartScenarioInPlace(ped, "WORLD_HUMAN_STAND_IMPATIENT", 0, true)
+        SetPedKeepTask(ped, true)
+        SetBlockingOfNonTemporaryEvents(ped, true)
+        SetEntityInvincible(ped, true)
+        FreezeEntityPosition(ped, true)
+        watchNPCs[#watchNPCs + 1] = ped
+    end
+
+    exports.ox_target:addBoxZone({
+    coords = vector3(-3254.75, 3907.34, 15.26),
+    size = vec3(1, 1, 5),
+    rotation = positions.w or 0.0,
+    debug = true,
+    drawSprite = false,
+    options = {
+        {
+            label = 'Actions Remaining',
+            name = 'Actions Remaining',
+            icon = 'fa-solid fa-envelope',
+            onSelect = function()
+                lib.notify({
+                title = 'Community Service',
+                description = 'You have ' .. taskCount .. ' actions left to complete',
+                type = 'error'
+                })
+            end,
+            distance = 1.5,
+        },
+    },
+    })
+
+end
+
 
 local function clearGuards()
     for _, ped in ipairs(watchNPCs) do
@@ -166,10 +227,12 @@ local function startTask(loc)
 end
 
 
-RegisterNetEvent('community:startService', function(taskCount)
+RegisterNetEvent('community:startService', function(newTaskCount)
     inService = true
+    taskCount = newTaskCount
     serviceTime = taskCount
     spawnGuards()
+    spawnHelper()
 
     CreateThread(function()
     while inService do
